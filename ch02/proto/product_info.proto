@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-option go_package = "./;ecommerce"; //生成go 的 pb 需要指定包名
+//option go_package = "./;ecommerce"; //生成go 的 pb 需要指定包名
 package ecommerce;
 
 service ProductInfo {
