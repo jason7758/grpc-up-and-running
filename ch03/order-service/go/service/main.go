@@ -82,5 +82,5 @@ func (s *server) UpdateOrder(stream pb.OrderManagement_UpdateOrderServer) error 
 }
 
 func (s *server) ProcessOrders(stream pb.OrderManagement_ProcessOrderServer) error {
-	
+
 }
