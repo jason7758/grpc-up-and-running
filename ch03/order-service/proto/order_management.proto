@@ -1,3 +1,4 @@
+//protoc -I proto/ proto/order_management.proto --go_out=plugins=grpc:go/service/ecommerce
 syntax = "proto3";
 import "google/protobuf/wrappers.proto";
 
@@ -9,8 +10,8 @@ service orderManagement {
     rpc addOrder(Order) returns (google.protobuf.StringValue);
     rpc getOrder(google.protobuf.StringValue) returns (Order);
     rpc searchOrders(google.protobuf.StringValue) returns (stream Order);
-    rpc updateOrder(stream Order) returns (google.protobuf.StringValue);
-    rpc processOrder(stream google.protobuf.StringValue) returns (stream CombinedShipment);
+    rpc updateOrders(stream Order) returns (google.protobuf.StringValue);
+    rpc processOrders(stream google.protobuf.StringValue) returns (stream CombinedShipment);
 }
 
 message Order {

@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	wrapper "github.com/golang/protobuf/ptypes/wrappers"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"io"
 	"log"
+	"net"
 	pb "ordermgt/service/ecommerce"
 	"strings"
 )
@@ -20,7 +22,7 @@ const (
 var orderMap = make(map[string]pb.Order)
 
 type server struct {
-	oderMap map[string]pb.Order
+	orderMap map[string]*pb.Order
 }
 
 //
@@ -63,7 +65,7 @@ func (s *server) SearchOrders(searchQuery *wrapper.StringValue, stream pb.OrderM
 	return nil
 }
 
-func (s *server) UpdateOrder(stream pb.OrderManagement_UpdateOrderServer) error {
+func (s *server) UpdateOrders(stream pb.OrderManagement_UpdateOrdersServer) error {
 	orderStr := "Update Order IDs :"
 	for {
 		order, err := stream.Recv()
@@ -81,6 +83,74 @@ func (s *server) UpdateOrder(stream pb.OrderManagement_UpdateOrderServer) error 
 	}
 }
 
-func (s *server) ProcessOrders(stream pb.OrderManagement_ProcessOrderServer) error {
+func (s *server) ProcessOrders(stream pb.OrderManagement_ProcessOrdersServer) error {
+	batchMarker := 1
+	var combinedShipmentMap = make(map[string]pb.CombinedShipment)
+	for {
+		orderId, err := stream.Recv()
+		log.Printf("Reading Proc order : %s", orderId)
+		if err != io.EOF {
+			// Clear has sent all the messages
+			// Send remaining shipments
+			log.Printf("EOF :%s", orderId)
+			for _, shipment := range combinedShipmentMap {
+				if err := stream.Send(&shipment); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+		if err != nil {
+			log.Println(err)
+			return err
+		}
 
+		destination := orderMap[orderId.GetValue()].Destination
+		shipment, found := combinedShipmentMap[destination]
+
+		if found {
+			ord := orderMap[orderId.GetValue()]
+			shipment.OrderList = append(shipment.OrderList, &ord)
+			combinedShipmentMap[destination] = shipment
+		} else {
+			comShip := pb.CombinedShipment{Id: "cmb - " + (orderMap[orderId.GetValue()].Destination)}
+			ord := orderMap[orderId.GetValue()]
+			comShip.OrderList = append(shipment.OrderList, &ord)
+			combinedShipmentMap[destination] = comShip
+			log.Print(len(comShip.OrderList), comShip.GetId())
+		}
+		if batchMarker == orderBatchSize {
+			for _, comb := range combinedShipmentMap {
+				log.Printf("Shipping : %v -> %v", comb.Id, len(comb.OrderList))
+				if err := stream.Send(&comb); err != nil {
+					return err
+				}
+			}
+			batchMarker = 0
+			combinedShipmentMap = make(map[string]pb.CombinedShipment)
+		} else {
+			batchMarker++
+		}
+	}
+}
+
+func main() {
+	initSampleData()
+	lis, err := net.Listen("tcp", port)
+	if err != nil {
+		log.Fatalf("failed to listen: %v", err)
+	}
+	s := grpc.NewServer()
+	pb.RegisterOrderManagementServer(s, &server{})
+	if err := s.Serve(lis); err != nil {
+		log.Fatalf("failed to server: %v", err)
+	}
+}
+
+func initSampleData() {
+	orderMap["102"] = pb.Order{Id: "102", Items: []string{"Good Pixel 3A", "Mac Book Pro"}, Destination: "Mountain View CA", Price: 1800.00}
+	orderMap["103"] = pb.Order{Id: "103", Items: []string{"Apple Watch S4"}, Destination: "San Jose, CA", Price: 400.00}
+	orderMap["104"] = pb.Order{Id: "104", Items: []string{"Google Home Mini", "Google Nest Hub"}, Destination: "Mountain View, CA", Price: 400.00}
+	orderMap["105"] = pb.Order{Id: "105", Items: []string{"Amazon Echo"}, Destination: "San Jose, CA", Price: 30.00}
+	orderMap["106"] = pb.Order{Id: "106", Items: []string{"Amazon Echo", "Apple iPhone Xs"}, Destination: "Mountain View, CA", Price: 300.00}
 }
